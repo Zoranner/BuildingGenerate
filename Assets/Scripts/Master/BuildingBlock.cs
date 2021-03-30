@@ -1,0 +1,927 @@
+﻿using UnityEditor;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+[ExecuteInEditMode]
+[RequireComponent(typeof(MeshRenderer), typeof(MeshFilter))]
+public class BuildingBlock : MonoBehaviour
+{
+    private float _TempMaxEdgeLength;
+    private int _TempMaxEdgeLengthSort;
+    private float[] _ContractDistances;
+    private int _SelfChildCount;
+    private Transform _ChildTransform;
+    private GameObject _ChildGameObject;
+    private MeshFilter _ChildMeshFilter;
+    private MeshRenderer _ChildMeshRenderer;
+    private CombineInstance[] _CombineInstances;
+    private Material[] _ChildMaterials;
+    private Matrix4x4 _SelfMatrix4x4;
+    private Mesh _CombinedBlock;
+    private Vector3 _TempFootPoint;
+
+    private const float PARCEL_MARGIN = 22.5f;
+    private const float TOWER_MARGIN = 5f;
+
+    public Material[] DefaultMaterials;
+
+    public bool NonCompliance { get; private set; }
+
+    private MeshFilter _MeshFilter;
+    private MeshFilter MeshFilter
+    {
+        get
+        {
+            if (_MeshFilter == null)
+            {
+                _MeshFilter = gameObject.GetOrAddComponent<MeshFilter>();
+            }
+
+            return _MeshFilter;
+        }
+    }
+
+    private MeshRenderer _MeshRenderer;
+    private MeshRenderer MeshRenderer
+    {
+        get
+        {
+            if (_MeshRenderer == null)
+            {
+                _MeshRenderer = gameObject.GetOrAddComponent<MeshRenderer>();
+            }
+
+            return _MeshRenderer;
+        }
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Vector3[] _ParcelPointsLocal;
+    public Vector3[] ParcelPointsLocal
+    {
+        get
+        {
+            if (_ParcelPointsLocal == null || _ParcelPointsLocal.Length != 4)
+            {
+                _ParcelPointsLocal = new Vector3[] {
+                    new Vector3(-50, 0, -50),
+                    new Vector3(-50, 0, 50),
+                    new Vector3(50, 0, 50),
+                    new Vector3(50, 0, -50)
+                };
+            }
+            return _ParcelPointsLocal;
+        }
+        private set => _ParcelPointsLocal = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Vector3[] _ParcelPoints;
+    public Vector3[] ParcelPoints
+    {
+        get
+        {
+            if (_ParcelPoints == null || _ParcelPoints.Length != 4)
+            {
+                _ParcelPoints = new Vector3[4];
+            }
+            return _ParcelPoints;
+        }
+        private set => _ParcelPoints = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Vector3[] _LastVector3Ns;
+    public Vector3[] LastVector3Ns
+    {
+        get
+        {
+            if (_LastVector3Ns == null || _LastVector3Ns.Length != 4)
+            {
+                _LastVector3Ns = new Vector3[4];
+            }
+            return _LastVector3Ns;
+        }
+        private set => _LastVector3Ns = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Vector3[] _NextVector3Ns;
+    public Vector3[] NextVector3Ns
+    {
+        get
+        {
+            if (_NextVector3Ns == null || _NextVector3Ns.Length != 4)
+            {
+                _NextVector3Ns = new Vector3[4];
+            }
+            return _NextVector3Ns;
+        }
+        private set => _ParcelPoints = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Vector3[] _VerticalVector3Ns;
+    public Vector3[] VerticalVector3Ns
+    {
+        get
+        {
+            if (_VerticalVector3Ns == null || _VerticalVector3Ns.Length != 4)
+            {
+                _VerticalVector3Ns = new Vector3[4];
+            }
+            return _VerticalVector3Ns;
+        }
+        private set => _VerticalVector3Ns = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private float[] _ParcelEdgeLengths;
+    public float[] ParcelEdgeLengths
+    {
+        get
+        {
+            if (_ParcelEdgeLengths == null || _ParcelEdgeLengths.Length != 4)
+            {
+                _ParcelEdgeLengths = new float[4];
+            }
+            return _ParcelEdgeLengths;
+        }
+        private set => _ParcelEdgeLengths = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private float[] _EdgeAngles;
+    public float[] EdgeAngles
+    {
+        get
+        {
+            if (_EdgeAngles == null || _EdgeAngles.Length != 4)
+            {
+                _EdgeAngles = new float[4];
+            }
+            return _EdgeAngles;
+        }
+        private set => _EdgeAngles = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private float[] _AngleSinValues;
+    public float[] AngleSinValues
+    {
+        get
+        {
+            if (_AngleSinValues == null || _AngleSinValues.Length != 4)
+            {
+                _AngleSinValues = new float[4];
+            }
+            return _AngleSinValues;
+        }
+        private set => _AngleSinValues = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private int[] _AngleSinValuesSort;
+    public int[] AngleSinValuesSort
+    {
+        get
+        {
+            if (_AngleSinValuesSort == null || _AngleSinValuesSort.Length != 4)
+            {
+                _AngleSinValuesSort = new int[] { 0, 1, 2, 3 };
+            }
+            return _AngleSinValuesSort;
+        }
+        private set => _AngleSinValuesSort = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Vector3[][] _BlockPointsLocal;
+    public Vector3[][] BlockPointsLocal
+    {
+        get
+        {
+            if (_BlockPointsLocal == null || _BlockPointsLocal.Length != 4)
+            {
+                _BlockPointsLocal = new Vector3[4][];
+
+                for (var i = 0; i < _BlockPointsLocal.Length; i++)
+                {
+                    _BlockPointsLocal[i] = new Vector3[4];
+                }
+            }
+            return _BlockPointsLocal;
+        }
+        private set => _BlockPointsLocal = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Vector3[][] _BlockPoints;
+    public Vector3[][] BlockPoints
+    {
+        get
+        {
+            if (_BlockPoints == null || _BlockPoints.Length != 4)
+            {
+                _BlockPoints = new Vector3[4][];
+
+                for (var i = 0; i < _BlockPoints.Length; i++)
+                {
+                    _BlockPoints[i] = new Vector3[4];
+                }
+            }
+            return _BlockPoints;
+        }
+        private set => _BlockPoints = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private float[][] _BlockEdgeLengths;
+    public float[][] BlockEdgeLengths
+    {
+        get
+        {
+            if (_BlockEdgeLengths == null || _BlockEdgeLengths.Length != 4)
+            {
+                _BlockEdgeLengths = new float[4][];
+
+                for (var i = 0; i < _BlockEdgeLengths.Length; i++)
+                {
+                    _BlockEdgeLengths[i] = new float[4];
+                }
+            }
+            return _BlockEdgeLengths;
+        }
+        private set => _BlockEdgeLengths = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private float[][] _BlockMaxEdgeLengths;
+    public float[][] BlockMaxEdgeLengths
+    {
+        get
+        {
+            if (_BlockMaxEdgeLengths == null || _BlockMaxEdgeLengths.Length != 4)
+            {
+                _BlockMaxEdgeLengths = new float[4][];
+
+                for (var i = 0; i < _BlockMaxEdgeLengths.Length; i++)
+                {
+                    _BlockMaxEdgeLengths[i] = new float[4];
+                }
+            }
+            return _BlockMaxEdgeLengths;
+        }
+        private set => _BlockMaxEdgeLengths = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private int[][] _BlockMaxEdgeLengthsSort;
+    public int[][] BlockMaxEdgeLengthsSort
+    {
+        get
+        {
+            if (_BlockMaxEdgeLengthsSort == null || _BlockMaxEdgeLengthsSort.Length != 4)
+            {
+                _BlockMaxEdgeLengthsSort = new int[4][];
+
+                for (var i = 0; i < _BlockMaxEdgeLengthsSort.Length; i++)
+                {
+                    _BlockMaxEdgeLengthsSort[i] = new int[] { 0, 1, 2, 3 };
+                }
+            }
+            return _BlockMaxEdgeLengthsSort;
+        }
+        private set => _BlockMaxEdgeLengthsSort = value;
+    }
+
+    [SerializeField]
+    [HideInInspector]
+    private Mesh[] _BlockStageMeshes;
+    private Mesh[] BlockStageMeshes
+    {
+        get
+        {
+            if (_BlockStageMeshes == null || _BlockStageMeshes.Length != 4)
+            {
+                _BlockStageMeshes = new Mesh[4];
+            }
+            return _BlockStageMeshes;
+        }
+        set => _BlockStageMeshes = value;
+    }
+
+    private void OnEnable()
+    {
+        transform.hideFlags = HideFlags.HideInInspector;
+    }
+
+    private void OnDrawGizmos()
+    {
+        var handleSize = HandleUtility.GetHandleSize(transform.position);
+        Handles.zTest = CompareFunction.LessEqual;
+        Handles.color = Color.gray;
+        Handles.DrawAAConvexPolygon(ParcelPoints);
+        for (var i = 0; i < 4; i++)
+        {
+            Handles.CubeHandleCap(i, ParcelPoints[i], Quaternion.identity, handleSize * 0.2F, EventType.Repaint);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        SetBuildingVisible(false);
+    }
+
+    public void SetParcelPointsLocal(int index, Vector3 value)
+    {
+        if (ParcelPoints[index] == value)
+        {
+            return;
+        }
+
+        //ParcelPointsLocal[index] = value;
+
+        ParcelPoints[index] = value;
+        UpdateParcelPoints();
+
+        EditorUtility.SetDirty(this);
+    }
+
+    public void UpdateParcelPoints()
+    {
+        for (var i = 0; i < 4; i++)
+        {
+            ParcelPointsLocal[i] = ParcelPoints[i] - transform.position;
+
+            LastVector3Ns[i] = (ParcelPoints[i] - ParcelPoints.RepeatGet(i - 1)).normalized;
+
+            NextVector3Ns[i] = (ParcelPoints[i] - ParcelPoints.RepeatGet(i + 1)).normalized;
+
+            VerticalVector3Ns[i] = Vector3.Cross(NextVector3Ns[i], Vector3.up).normalized;
+
+            ParcelEdgeLengths[i] = Vector3.Distance(ParcelPoints[i], ParcelPoints.RepeatGet(i + 1));
+
+            EdgeAngles[i] = Vector3.Angle(LastVector3Ns[i], NextVector3Ns[i]);
+
+            AngleSinValues[i] = Vector3.Cross(NextVector3Ns[i], LastVector3Ns[i]).magnitude;
+        }
+
+        GenerateBuilding();
+    }
+
+    public void GenerateBuilding()
+    {
+        NonCompliance = false;
+
+        for (var i = 0; i < 4; i++)
+        {
+            if (ParcelEdgeLengths[i] > 200 && ParcelEdgeLengths.RepeatGet(i + 1) > 200 || EdgeAngles[i] < 60)
+            {
+                // 不满足生成规则直接返回
+                SetBuildingVisible(false);
+                NonCompliance = true;
+                return;
+            }
+        }
+
+        // 留出过道统一收缩22.5边距
+        for (var i = 0; i < 4; i++)
+        {
+            BlockPointsLocal[0][i] = ParcelPointsLocal[i] - (NextVector3Ns[i] + LastVector3Ns[i]) * (PARCEL_MARGIN / AngleSinValues[i]);
+        }
+
+        // 计算最大建筑区域四条边边长
+        for (var i = 0; i < 4; i++)
+        {
+            _TempMaxEdgeLength = Vector3.Distance(BlockPointsLocal[0][i], BlockPointsLocal[0].RepeatGet(i + 1));
+            if (_TempMaxEdgeLength < 55)
+            {
+                // 不满足生成规则直接返回
+                SetBuildingVisible(false);
+                NonCompliance = true;
+                return;
+            }
+            BlockMaxEdgeLengths[0][i] = _TempMaxEdgeLength;
+        }
+
+        // 对最大建筑区域四条边长排序（从小到大）
+        BlockMaxEdgeLengthsSort[0] = new int[] { 0, 1, 2, 3 };
+        for (var i = 0; i < 3; i++)
+        {
+            for (var j = 0; j < 3 - i; j++)
+            {
+                if (BlockMaxEdgeLengths[0][BlockMaxEdgeLengthsSort[0][j]] > BlockMaxEdgeLengths[0][BlockMaxEdgeLengthsSort[0][j + 1]])
+                {
+                    _TempMaxEdgeLengthSort = BlockMaxEdgeLengthsSort[0][j];
+                    BlockMaxEdgeLengthsSort[0][j] = BlockMaxEdgeLengthsSort[0][j + 1];
+                    BlockMaxEdgeLengthsSort[0][j + 1] = _TempMaxEdgeLengthSort;
+                }
+            }
+        }
+
+        // 计算符合规则的最终收缩距离
+        _ContractDistances = new float[4];
+        var minEdgeLengthIndex = BlockMaxEdgeLengthsSort[0][0];
+        _ContractDistances[minEdgeLengthIndex] = 22.5f;
+        var sideEdgeLengthIndex = BlockMaxEdgeLengths[0].RepeatGet(minEdgeLengthIndex + 1) <= BlockMaxEdgeLengths[0].RepeatGet(minEdgeLengthIndex - 1) ? minEdgeLengthIndex + 1 : minEdgeLengthIndex - 1;
+        _ContractDistances.RepeatSet(sideEdgeLengthIndex, 22.5f);
+        var otherSideRestDistance = Mathf.Max(0, BlockMaxEdgeLengths[0][minEdgeLengthIndex] - 105) * AngleSinValues.RepeatGet(sideEdgeLengthIndex + 2);
+        _ContractDistances.RepeatSet(sideEdgeLengthIndex + 2, otherSideRestDistance + 22.5f);
+        var oppositeRestDistance = Mathf.Max(0, BlockMaxEdgeLengths[0].RepeatGet(sideEdgeLengthIndex) - 105) * AngleSinValues.RepeatGet(minEdgeLengthIndex + 2);
+        _ContractDistances.RepeatSet(minEdgeLengthIndex + 2, oppositeRestDistance + 22.5f);
+
+        // 重新计算最终收缩后的顶点
+        for (var i = 0; i < 4; i++)
+        {
+            BlockPointsLocal[0][i] = ParcelPointsLocal[i] - (LastVector3Ns[i] * _ContractDistances[i] + NextVector3Ns[i] * _ContractDistances.RepeatGet(i - 1)) / AngleSinValues[i];
+            BlockPoints[0][i] = transform.position + BlockPointsLocal[0][i];
+        }
+
+        for (var i = 0; i < 4; i++)
+        {
+            BlockEdgeLengths[0][i] = Vector3.Distance(BlockPoints[0][i], BlockPoints[0].RepeatGet(i + 1));
+        }
+
+        // 生成建筑区域第一阶层的多边形网格
+        BlockStageMeshes[0] = CreatePrismMesh(BlockPointsLocal[0], 0.2f, 4f);
+        for (var i = 0; i < 6; i++)
+        {
+            _ChildTransform = transform.Find($"Floor-1-{i:D2}");
+            if (!_ChildTransform)
+            {
+                _ChildGameObject = new GameObject($"Floor-1-{i:D2}");
+                _ChildTransform = _ChildGameObject.transform;
+                _ChildTransform.SetParent(transform);
+                _ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+            _ChildTransform.localPosition = new Vector3(0, i * 4f, 0);
+            _ChildTransform.localRotation = Quaternion.identity;
+            _ChildTransform.localScale = Vector3.one;
+            _ChildMeshFilter = _ChildTransform.GetOrAddComponent<MeshFilter>();
+            _ChildMeshRenderer = _ChildTransform.GetOrAddComponent<MeshRenderer>();
+            _ChildMeshFilter.mesh = BlockStageMeshes[0];
+            _ChildMeshRenderer.material = DefaultMaterials[0];
+        };
+
+        // 对建筑区域四个角角度进行排序（从大到小）
+        AngleSinValuesSort = new int[] { 0, 1, 2, 3 };
+        for (var i = 0; i < 3; i++)
+        {
+            for (var j = 0; j < 3 - i; j++)
+            {
+                if (AngleSinValues[AngleSinValuesSort[j]] < AngleSinValues[AngleSinValuesSort[j + 1]])
+                {
+                    //_TempAngleSinValueSort = AngleSinValuesSort[j];
+                    AngleSinValuesSort[j] = AngleSinValuesSort[j + 1];
+                    AngleSinValuesSort[j + 1] = _TempMaxEdgeLengthSort;
+                }
+            }
+        }
+
+        // 统一收缩5米边距留出第二阶层过道
+        for (var i = 0; i < 4; i++)
+        {
+            BlockPointsLocal[1][i] = BlockPointsLocal[0][i] - (NextVector3Ns[i] + LastVector3Ns[i]) * (TOWER_MARGIN / AngleSinValues[i]);
+            BlockPoints[1][i] = transform.position + BlockPointsLocal[1][i];
+        }
+
+        // 计算第二阶层最大建筑区域四条边边长
+        for (var i = 0; i < 4; i++)
+        {
+            _TempMaxEdgeLength = Vector3.Distance(BlockPointsLocal[1][i], BlockPointsLocal[1].RepeatGet(i + 1));
+            if (_TempMaxEdgeLength < 45)
+            {
+                // 不满足生成规则直接返回
+                SetBuildingVisible(false);
+                NonCompliance = true;
+                return;
+            }
+            BlockMaxEdgeLengths[1][i] = _TempMaxEdgeLength;
+        }
+
+        // 对最大建筑区域四条边长排序（从小到大）
+        BlockMaxEdgeLengthsSort[1] = new int[] { 0, 1, 2, 3 };
+        for (var i = 0; i < 3; i++)
+        {
+            for (var j = 0; j < 3 - i; j++)
+            {
+                if (BlockMaxEdgeLengths[1][BlockMaxEdgeLengthsSort[1][j]] > BlockMaxEdgeLengths[1][BlockMaxEdgeLengthsSort[1][j + 1]])
+                {
+                    _TempMaxEdgeLengthSort = BlockMaxEdgeLengthsSort[1][j];
+                    BlockMaxEdgeLengthsSort[1][j] = BlockMaxEdgeLengthsSort[1][j + 1];
+                    BlockMaxEdgeLengthsSort[1][j + 1] = _TempMaxEdgeLengthSort;
+                }
+            }
+        }
+
+        // 计算建筑区域第二阶层的数据
+        var maxEdgeLengthIndex = BlockMaxEdgeLengthsSort[1][3];
+
+        // 排序第一的角一定为钝角
+        // 排序第二的角为直角
+        if (AngleSinValues[AngleSinValuesSort[1]] == 90)
+        {
+            // 排序第三的角为直角
+            if (AngleSinValues[AngleSinValuesSort[2]] == 90)
+            {
+                _TempFootPoint = Point2LineFootPoint(BlockPointsLocal[1][AngleSinValuesSort[0]], BlockPointsLocal[1][maxEdgeLengthIndex], BlockPointsLocal[1].RepeatGet(maxEdgeLengthIndex + 1));
+                BlockPointsLocal[1][maxEdgeLengthIndex] = _TempFootPoint;
+                BlockPoints[1][maxEdgeLengthIndex] = transform.position + _TempFootPoint;
+            }
+            // 排序第三的角为锐角
+            else if (AngleSinValues[AngleSinValuesSort[2]] < 90)
+            {
+
+            }
+        }
+        // 排序第二的角也为钝角
+        else
+        {
+
+        }
+
+        // 生成建筑区域第二阶层的多边形网格
+
+        // 合并所有网格
+        _SelfChildCount = transform.childCount;
+        _CombineInstances = new CombineInstance[_SelfChildCount];
+        _ChildMaterials = new Material[_SelfChildCount];
+        _SelfMatrix4x4 = transform.worldToLocalMatrix;
+        for (var i = 0; i < _SelfChildCount; i++)
+        {
+            _ChildTransform = transform.GetChild(i);
+            _ChildMeshFilter = _ChildTransform.GetComponent<MeshFilter>();
+            _ChildMeshRenderer = _ChildTransform.GetComponent<MeshRenderer>();
+            if (_ChildMeshFilter == null || _ChildMeshRenderer == null)
+            {
+                continue;
+            }
+            _CombineInstances[i].mesh = _ChildMeshFilter.sharedMesh;
+            _CombineInstances[i].transform = _SelfMatrix4x4 * _ChildMeshFilter.transform.localToWorldMatrix;
+            _ChildMeshRenderer.enabled = false;
+            _ChildMaterials[i] = _ChildMeshRenderer.sharedMaterial;
+        }
+        _CombinedBlock = new Mesh
+        {
+            name = "Combined Block"
+        };
+        _CombinedBlock.CombineMeshes(_CombineInstances, false);
+        MeshFilter.mesh = _CombinedBlock;
+        MeshRenderer.sharedMaterials = _ChildMaterials;
+
+        //// 隐藏用于中间过渡的子物体
+        //for (var i = 0; i < transform.childCount; i++)
+        //{
+        //    _TempTransform = transform.GetChild(i);
+        //    if (_TempTransform)
+        //    {
+        //        _TempTransform.gameObject.SetActive(false);
+        //    }
+        //}
+
+        SetBuildingVisible(true);
+    }
+
+    public void SetBuildingVisible(bool visible)
+    {
+        MeshRenderer.enabled = visible;
+    }
+
+    private static Mesh _PrismMesh;
+    private static Mesh CreatePrismMesh(Vector3[] points, float floor, float ceil)
+    {
+        if (points.Length != 4)
+        {
+            return null;
+        }
+
+        _PrismMesh = new Mesh();
+
+        var vertices = new Vector3[24];
+        var triangles = new int[36];
+
+        //forward
+        vertices[0] = points[1] + Vector3.up * floor;
+        vertices[1] = points[0] + Vector3.up * floor;
+        vertices[2] = points[1] + Vector3.up * ceil;
+        vertices[3] = points[0] + Vector3.up * ceil;
+        //back
+        vertices[4] = points[2] + Vector3.up * ceil;
+        vertices[5] = points[3] + Vector3.up * ceil;
+        vertices[6] = points[2] + Vector3.up * floor;
+        vertices[7] = points[3] + Vector3.up * floor;
+        //up
+        vertices[8] = vertices[2];
+        vertices[9] = vertices[3];
+        vertices[10] = vertices[4];
+        vertices[11] = vertices[5];
+        //down
+        vertices[12] = vertices[6];
+        vertices[13] = vertices[7];
+        vertices[14] = vertices[0];
+        vertices[15] = vertices[1];
+        //right
+        vertices[16] = vertices[6];
+        vertices[17] = vertices[0];
+        vertices[18] = vertices[4];
+        vertices[19] = vertices[2];
+        //left
+        vertices[20] = vertices[5];
+        vertices[21] = vertices[3];
+        vertices[22] = vertices[7];
+        vertices[23] = vertices[1];
+
+        var currentCount = 0;
+        for (var i = 0; i < 24; i += 4)
+        {
+            triangles[currentCount++] = i;
+            triangles[currentCount++] = i + 3;
+            triangles[currentCount++] = i + 1;
+
+            triangles[currentCount++] = i;
+            triangles[currentCount++] = i + 2;
+            triangles[currentCount++] = i + 3;
+        }
+
+        _PrismMesh.vertices = vertices;
+        _PrismMesh.triangles = triangles;
+        _PrismMesh.RecalculateNormals();
+
+        return _PrismMesh;
+
+    }
+
+    // 求点到直线的垂足
+    private static Vector3 Point2LineFootPoint(Vector3 point, Vector3 linePoint1, Vector3 linePoint2)
+    {
+        var equationA = linePoint2.z - linePoint1.z;
+        var equationB = linePoint1.x - linePoint2.x;
+        var equationC = linePoint2.x * linePoint1.z - linePoint1.x * linePoint2.z; //x2 * y1 - x1 * y2
+        if (linePoint1 == linePoint2)
+        {
+            // linePoint1与linePoint2重合
+            return linePoint1;
+        }
+        else if (equationA * point.x + equationB * point.z + equationC == 0)
+        {
+            // point在line上
+            return point;
+        }
+        else
+        {
+            var x = (equationB * equationB * point.x - equationA * equationB * point.z - equationA * equationC) / (equationA * equationA + equationB * equationB);
+            var z = (-equationA * equationB * point.x + equationA * equationA * point.z - equationB * equationC) / (equationA * equationA + equationB * equationB);
+            return new Vector3(x, 0, z);
+        }
+    }
+
+    //private Vector3[] _TempPolygonPointArray1;
+
+    //private Vector3[] _TempPolygonPointArray2;
+
+    //private List<Vector3> _TempChildPolygonPoints1;C
+
+    //private List<Vector3> _TempChildPolygonPoints2;
+
+    //private Polygon _TempChildPolygon1;
+
+    //private Polygon _TempChildPolygon2;
+
+    //private void RenderPolygonDivision(Polygon polygon)
+    //{
+    //    // 顶点数量等于4
+    //    if (polygon.PointsCount == 4)
+    //    {
+    //        if(polygon.Area < 10)
+    //        {
+    //            return;
+    //        }
+
+    //        if (polygon.ConcavesCount == 0)
+    //        {
+    //            var tempCenterPoint1 = (polygon.Points[polygon.MaxDistanceIndex] + polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 1)]) / 2;
+    //            var tempCenterPoint2 = (polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 2)] + polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3)]) / 2;
+    //            Debug.DrawLine(tempCenterPoint1, tempCenterPoint2, Color.blue);
+
+    //            _TempChildPolygonPoints1 = new List<Vector3>
+    //            {
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex)],
+    //                tempCenterPoint1,
+    //                tempCenterPoint2,
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3)]
+    //            };
+    //            _TempPolygonPointArray1 = _TempChildPolygonPoints1.ToArray();
+    //            _TempChildPolygon1 = new Polygon(_TempPolygonPointArray1);
+
+    //            RenderPolygonDivision(_TempChildPolygon1);
+
+    //            _TempChildPolygonPoints2 = new List<Vector3>
+    //            {
+    //                tempCenterPoint1,
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 1)],
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 2)],
+    //                tempCenterPoint2,
+    //            };
+    //            _TempPolygonPointArray2 = _TempChildPolygonPoints2.ToArray();
+    //            _TempChildPolygon2 = new Polygon(_TempPolygonPointArray2);
+
+    //            RenderPolygonDivision(_TempChildPolygon2);
+    //        }
+    //        else if (polygon.ConcavesCount == 1)
+    //        {
+
+    //        }
+    //    }
+
+    //    // 顶点数量等于5
+    //    else if (polygon.PointsCount == 5)
+    //    {
+    //        if (polygon.ConcavesCount == 0)
+    //        {
+    //            var tempCenterPoint = (polygon.Points[polygon.MaxDistanceIndex] + polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 1)]) / 2;
+    //            Debug.DrawLine(tempCenterPoint, polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3)], Color.blue);
+
+    //            _TempChildPolygonPoints1 = new List<Vector3>
+    //            {
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex)],
+    //                tempCenterPoint,
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3)],
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 4)]
+
+    //            };
+    //            _TempPolygonPointArray1 = _TempChildPolygonPoints1.ToArray();
+    //            _TempChildPolygon1 = new Polygon(_TempPolygonPointArray1);
+
+    //            RenderPolygonDivision(_TempChildPolygon1);
+
+    //            _TempChildPolygonPoints2 = new List<Vector3>
+    //            {
+    //                tempCenterPoint,
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 1)],
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 2)],
+    //                polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3)]
+
+    //            };
+    //            _TempPolygonPointArray2 = _TempChildPolygonPoints2.ToArray();
+    //            _TempChildPolygon2 = new Polygon(_TempPolygonPointArray2);
+
+    //            RenderPolygonDivision(_TempChildPolygon2);
+    //        }
+    //        else if (polygon.ConcavesCount == 1)
+    //        {
+    //            var tempCenterPoint = (polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + 2)] + polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + 3)]) / 2;
+    //            Debug.DrawLine(tempCenterPoint, polygon.Points[polygon.Concaves[0]], Color.blue);
+    //        }
+    //        else if (polygon.ConcavesCount == 2)
+    //        {
+    //            var tempCenterPoint = (polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + 2)] + polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + 3)]) / 2;
+    //            Debug.DrawLine(tempCenterPoint, polygon.Points[polygon.Concaves[0]], Color.blue);
+    //        }
+    //    }
+
+    //    // 顶点数量等于6
+    //    else if (polygon.PointsCount == 6)
+    //    {
+    //        if (polygon.ConcavesCount == 0)
+    //        {
+    //            Debug.DrawLine(polygon.Points[polygon.MaxDistanceIndex], polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3)], Color.blue);
+
+    //            _TempChildPolygonPoints1 = new List<Vector3>();
+    //            for (int i = 0; i < 4; i++)
+    //            {
+    //                _TempChildPolygonPoints1.Add(polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + i)]);
+    //            }
+    //            _TempPolygonPointArray1 = _TempChildPolygonPoints1.ToArray();
+    //            _TempChildPolygon1 = new Polygon(_TempPolygonPointArray1);
+
+    //            RenderPolygonDivision(_TempChildPolygon1);
+
+    //            _TempChildPolygonPoints2 = new List<Vector3>();
+    //            for (int i = 0; i < 4; i++)
+    //            {
+    //                _TempChildPolygonPoints2.Add(polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3 + i)]);
+    //            }
+    //            _TempPolygonPointArray2 = _TempChildPolygonPoints2.ToArray();
+    //            _TempChildPolygon2 = new Polygon(_TempPolygonPointArray2);
+
+    //            RenderPolygonDivision(_TempChildPolygon2);
+    //        }
+    //        else if (polygon.ConcavesCount == 1)
+    //        {
+    //            Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + 3)], Color.blue);
+    //        }
+    //        else if (polygon.ConcavesCount == 2)
+    //        {
+    //            if (Mathf.Sqrt(polygon.Concaves[0] - polygon.Concaves[1]) == 3)
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //            else
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //        }
+    //        else if (polygon.ConcavesCount == 3)
+    //        {
+    //            if (Mathf.Sqrt(polygon.Concaves[0] - polygon.Concaves[1]) == 3)
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //            else
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //        }
+    //    }
+
+    //    // 顶点数量等于7
+    //    else if (polygon.PointsCount == 7)
+    //    {
+    //        if (polygon.ConcavesCount == 0)
+    //        {
+    //            Debug.DrawLine(polygon.Points[polygon.MaxDistanceIndex], polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3)], Color.blue);
+
+    //            _TempChildPolygonPoints1 = new List<Vector3>();
+    //            for (int i = 0; i < 4; i++)
+    //            {
+    //                _TempChildPolygonPoints1.Add(polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + i)]);
+    //            }
+    //            _TempPolygonPointArray1 = _TempChildPolygonPoints1.ToArray();
+    //            _TempChildPolygon1 = new Polygon(_TempPolygonPointArray1);
+
+    //            RenderPolygonDivision(_TempChildPolygon1);
+
+    //            _TempChildPolygonPoints2 = new List<Vector3>();
+    //            for (int i = 0; i < 5; i++)
+    //            {
+    //                _TempChildPolygonPoints2.Add(polygon.Points[polygon.ClampIndex(polygon.MaxDistanceIndex + 3 + i)]);
+    //            }
+    //            _TempPolygonPointArray2 = _TempChildPolygonPoints2.ToArray();
+    //            _TempChildPolygon2 = new Polygon(_TempPolygonPointArray2);
+
+    //            RenderPolygonDivision(_TempChildPolygon2);
+    //        }
+    //        else if (polygon.ConcavesCount == 1)
+    //        {
+    //            Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + 3)], Color.blue);
+
+    //            _TempChildPolygonPoints1 = new List<Vector3>();
+    //            for (int i = 0; i < 4; i++)
+    //            {
+    //                _TempChildPolygonPoints1.Add(polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + i)]);
+    //            }
+    //            _TempPolygonPointArray1 = _TempChildPolygonPoints1.ToArray();
+    //            _TempChildPolygon1 = new Polygon(_TempPolygonPointArray1);
+
+    //            RenderPolygonDivision(_TempChildPolygon1);
+
+    //            _TempChildPolygonPoints2 = new List<Vector3>();
+    //            for (int i = 0; i < 5; i++)
+    //            {
+    //                _TempChildPolygonPoints2.Add(polygon.Points[polygon.ClampIndex(polygon.Concaves[0] + 3 + i)]);
+    //            }
+    //            _TempPolygonPointArray2 = _TempChildPolygonPoints2.ToArray();
+    //            _TempChildPolygon2 = new Polygon(_TempPolygonPointArray2);
+
+    //            RenderPolygonDivision(_TempChildPolygon2);
+    //        }
+    //        else if (polygon.ConcavesCount == 2)
+    //        {
+    //            if (Mathf.Sqrt(polygon.Concaves[0] - polygon.Concaves[1]) == 3)
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //            else
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //        }
+    //        else if (polygon.ConcavesCount == 3)
+    //        {
+    //            if (Mathf.Sqrt(polygon.Concaves[0] - polygon.Concaves[1]) == 3)
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //            else
+    //            {
+    //                Debug.DrawLine(polygon.Points[polygon.Concaves[0]], polygon.Points[polygon.Concaves[1]], Color.blue);
+    //            }
+    //        }
+    //    }
+    //}
+}

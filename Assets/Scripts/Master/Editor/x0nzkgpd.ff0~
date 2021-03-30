@@ -1,0 +1,81 @@
+﻿using UnityEditor;
+using UnityEngine;
+
+[CustomEditor(typeof(BuildingBlock)), CanEditMultipleObjects]
+public class BuildingBlockEditor : Editor
+{
+    private BuildingBlock _Target;
+    private Transform _TargetTransform;
+    //private Vector3[] _ParcelPoints;
+
+    private Vector3 _RulerRangeVector;
+    private Vector3 _RulerValueVector;
+    private Vector3 _ThisRulerRangePoint;
+    private Vector3 _NextRulerRangePoint;
+    private Vector3 _ThisRulerValuePoint;
+    private Vector3 _NextRulerValuePoint;
+    private Vector3 _RulerValueLabelPoint;
+    private Vector3 _RulerValueLabelOffset;
+
+    private void OnEnable()
+    {
+        Debug.Log("awake");
+        _Target = (BuildingBlock)target;
+        _TargetTransform = _Target.transform;
+        EditorWindow.focusedWindow.wantsMouseMove = false;
+    }
+
+    private void OnSceneGUI()
+    {
+        var handleSize = HandleUtility.GetHandleSize(_TargetTransform.position);
+        Handles.color = Color.gray;
+        Handles.Label(_TargetTransform.position, $"{_TargetTransform.name}");
+        Handles.color = Color.white;
+        _Target.UpdateParcelPoints();
+        for (var i = 0; i < 4; i++)
+        {
+            //Handles.SphereHandleCap(i, _TargetTransform.position + _ParcelPolygon.Points[i], Quaternion.identity, handleSize * 0.2F, EventType.Repaint);
+            _Target.SetParcelPointsLocal(i, Handles.PositionHandle(_Target.ParcelPoints[i], Quaternion.identity) - _TargetTransform.position);
+            _RulerRangeVector = _Target.VerticalVector3Ns[i] * handleSize * 0.4f;
+            _RulerValueVector = _Target.VerticalVector3Ns[i] * handleSize * 0.2f;
+            _ThisRulerRangePoint = _Target.ParcelPoints[i] - _RulerRangeVector;
+            _NextRulerRangePoint = _Target.ParcelPoints.RepeatGet(i + 1) - _RulerRangeVector;
+            _ThisRulerValuePoint = _Target.ParcelPoints[i] - _RulerValueVector;
+            _NextRulerValuePoint = _Target.ParcelPoints.RepeatGet(i + 1) - _RulerValueVector;
+            _RulerValueLabelPoint = (_ThisRulerValuePoint + _NextRulerValuePoint) / 2;
+            Handles.DrawLine(_Target.ParcelPoints[i], _ThisRulerRangePoint);
+            Handles.DrawLine(_Target.ParcelPoints.RepeatGet(i + 1), _NextRulerRangePoint);
+            //Handles.DrawLine(_ThisRulerValuePoint, _NextRulerValuePoint);
+            _RulerValueLabelOffset = _Target.NextVector3Ns[i] * handleSize * 0.3f;
+            Handles.DrawLine(_ThisRulerValuePoint, _RulerValueLabelPoint + _RulerValueLabelOffset);
+            Handles.DrawLine(_NextRulerValuePoint, _RulerValueLabelPoint - _RulerValueLabelOffset);
+            Handles.Label(_RulerValueLabelPoint, $"{_Target.ParcelEdgeLengths[i]}m", GeneralGUIStyle.Normal);
+        }
+        //Debug.LogError(1);
+    }
+
+    public static class GeneralGUIStyle
+    {
+        private static GUIStyle _Normal;
+        public static GUIStyle Normal
+        {
+            get
+            {
+                if(_Normal == null)
+                {
+                    _Normal = new GUIStyle
+                    {
+                        alignment = TextAnchor.MiddleCenter,
+                        fixedWidth = 100,
+                        fixedHeight = 100
+                        //fontSize = 16,
+                        //fontStyle = FontStyle.Bold,
+                    };
+                    _Normal.normal.textColor = Color.white;
+                }
+
+                return _Normal;
+            }
+        }
+    }
+}
