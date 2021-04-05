@@ -610,7 +610,7 @@ public class BuildingBlock : MonoBehaviour
                     _TempVerticalLine = Vector3.Cross(NextVector3Ns[maxAngleValueIndex], Vector3.up).normalized;
                     _TempIntersectPoint = TwoLinesIntersectPoint(_MaxAngleValuePoint, _MaxAngleValuePoint + _TempVerticalLine,
                                                                  BlockPoints[1].RepeatGet(maxAngleValueIndex + 2), BlockPoints[1].RepeatGet(maxAngleValueIndex + 3));
-                    BlockPointsLocal[1][lastAngleValueIndex] = _TempIntersectPoint - transform.position;
+                    BlockPoints[1][lastAngleValueIndex] = _TempIntersectPoint;
                 }
                 // 左直角梯形
                 else if (nextAngleValue < lastAngleValue)
@@ -619,7 +619,7 @@ public class BuildingBlock : MonoBehaviour
                     _TempVerticalLine = Vector3.Cross(LastVector3Ns[maxAngleValueIndex], Vector3.up).normalized;
                     _TempIntersectPoint = TwoLinesIntersectPoint(_MaxAngleValuePoint, _MaxAngleValuePoint + _TempVerticalLine,
                                                                  BlockPoints[1].RepeatGet(maxAngleValueIndex + 1), BlockPoints[1].RepeatGet(maxAngleValueIndex + 2));
-                    BlockPointsLocal[1][nextAngleValueIndex] = _TempIntersectPoint - transform.position;
+                    BlockPoints[1][nextAngleValueIndex] = _TempIntersectPoint;
                 }
                 // 特殊情况
                 else if (nextAngleValue == lastAngleValue)
@@ -630,13 +630,13 @@ public class BuildingBlock : MonoBehaviour
                     _TempVerticalLine = Vector3.Cross(NextVector3Ns[maxAngleValueIndex], Vector3.up).normalized;
                     _TempIntersectPoint = TwoLinesIntersectPoint(_MaxAngleValuePoint, _MaxAngleValuePoint + _TempVerticalLine,
                                                                  BlockPoints[1].RepeatGet(maxAngleValueIndex + 2), BlockPoints[1].RepeatGet(maxAngleValueIndex + 3));
-                    BlockPointsLocal[1][lastAngleValueIndex] = _TempIntersectPoint - transform.position;
+                    BlockPoints[1][lastAngleValueIndex] = _TempIntersectPoint;
 
                     // 再次作垂线求交点
                     _TempVerticalLine = Vector3.Cross(_TempVerticalLine, Vector3.up).normalized;
                     _TempIntersectPoint = TwoLinesIntersectPoint(_TempIntersectPoint, _TempIntersectPoint + _TempVerticalLine,
                                                                  BlockPoints[1].RepeatGet(maxAngleValueIndex + 1), BlockPoints[1].RepeatGet(maxAngleValueIndex + 2));
-                    BlockPointsLocal[1][faceAngleValueIndex] = _TempIntersectPoint - transform.position;
+                    BlockPoints[1][faceAngleValueIndex] = _TempIntersectPoint;
                 }
             }
             // 排序第三的角为锐角
@@ -664,7 +664,7 @@ public class BuildingBlock : MonoBehaviour
         // 重新计算最终收缩后的顶点
         for (var i = 0; i < 4; i++)
         {
-            BlockPoints[1][i] = transform.position + BlockPointsLocal[1][i];
+            BlockPointsLocal[1][i] = BlockPoints[1][i] - transform.position;
         }
 
         for (var i = 0; i < 4; i++)

@@ -9,6 +9,9 @@ public class BuildingBlockEditor : Editor
 
     private SceneView _SceneView;
 
+    private Vector3 _TempPosition;
+    private Quaternion _TempRotation;
+
     private Vector3 _RulerRangeVector;
     private Vector3 _RulerValueVector;
     private Vector3 _ThisRulerRangePoint;
@@ -29,10 +32,23 @@ public class BuildingBlockEditor : Editor
     {
         var handleSize = HandleUtility.GetHandleSize(_TargetTransform.position);
         Handles.color = Color.white;
+
+        if (_TempPosition != _TargetTransform.position)
+        {
+            for (var i = 0; i < 4; i++)
+            {
+                _Target.ParcelPoints[i] = _Target.ParcelPointsLocal[i] + _TargetTransform.position;
+            }
+
+            _Target.UpdateParcelPoints();
+
+            _TempPosition = _TargetTransform.position;
+        }
+
         for (var i = 0; i < 4; i++)
         {
             //_Target.SetParcelPointsLocal(i, Handles.PositionHandle(_Target.ParcelPoints[i], Quaternion.identity) - _TargetTransform.position);
-            _Target.SetParcelPointsLocal(i, Handles.PositionHandle(_Target.ParcelPoints[i], Quaternion.identity));
+            _Target.SetParcelPoints(i, Handles.PositionHandle(_Target.ParcelPoints[i], Quaternion.identity));
 
             _RulerRangeVector = _Target.VerticalVector3Ns[i] * handleSize * 0.4f;
             _RulerValueVector = _Target.VerticalVector3Ns[i] * handleSize * 0.2f;
@@ -47,7 +63,7 @@ public class BuildingBlockEditor : Editor
             Handles.DrawLine(_Target.ParcelPoints.RepeatGet(i + 1), _NextRulerRangePoint);
             Handles.DrawLine(_ThisRulerValuePoint, _RulerValueLabelPoint + _RulerValueLabelOffset);
             Handles.DrawLine(_NextRulerValuePoint, _RulerValueLabelPoint - _RulerValueLabelOffset);
-            Handles.Label(_RulerValueLabelPoint, $"[{i}] {_Target.ParcelEdgeLengths[i]}m", GeneralGUIStyle.Normal);
+            Handles.Label(_RulerValueLabelPoint, $"[{i}] {_Target.ParcelEdgeLengths[i]:0.00}m", GeneralGUIStyle.Normal);
 
             if (!_Target.NonCompliance)
             {
@@ -61,7 +77,7 @@ public class BuildingBlockEditor : Editor
                 Handles.DrawLine(_Target.BlockPoints[0].RepeatGet(i + 1), _NextRulerRangePoint);
                 Handles.DrawLine(_ThisRulerValuePoint, _RulerValueLabelPoint + _RulerValueLabelOffset);
                 Handles.DrawLine(_NextRulerValuePoint, _RulerValueLabelPoint - _RulerValueLabelOffset);
-                Handles.Label(_RulerValueLabelPoint, $"{_Target.BlockEdgeLengths[0][i]}m", GeneralGUIStyle.Normal);
+                Handles.Label(_RulerValueLabelPoint, $"{_Target.BlockEdgeLengths[0][i]:0.00}m", GeneralGUIStyle.Normal);
             }
             else
             {
@@ -69,26 +85,6 @@ public class BuildingBlockEditor : Editor
             }
         }
     }
-
-    //public override void OnInspectorGUI()
-    //{
-    //    GeneralGUIStyle.BeginGroup("Generate Building");
-    //    EditorGUI.BeginDisabledGroup(!_BuildingGenerated);
-    //    if (GUILayout.Button("Edit", EditorStyles.miniButton))
-    //    {
-    //        _Target.SetBuildingVisible(false);
-    //        _BuildingGenerated = false;
-    //    }
-    //    EditorGUI.EndDisabledGroup();
-    //    EditorGUI.BeginDisabledGroup(_BuildingGenerated);
-    //    if (GUILayout.Button("Build", EditorStyles.miniButton))
-    //    {
-    //        _Target.GenerateBuilding();
-    //        _BuildingGenerated = true;
-    //    }
-    //    EditorGUI.EndDisabledGroup();
-    //    GeneralGUIStyle.EndGroup();
-    //}
 
     public static class GeneralGUIStyle
     {

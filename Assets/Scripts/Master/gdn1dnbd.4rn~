@@ -7,8 +7,8 @@ using UnityEngine.Rendering;
 public class BuildingBlock : MonoBehaviour
 {
     private float _TempMaxEdgeLength;
-    private int _TempEdgeLengthSort;
-    private int _TempAngleValueSort;
+    private int _TempMaxEdgeLengthSort;
+    private int _TempMaxEdgeAngleSort;
     private float[] _ContractDistances;
     private int _SelfChildCount;
     private Transform _ChildTransform;
@@ -19,12 +19,7 @@ public class BuildingBlock : MonoBehaviour
     private Material[] _ChildMaterials;
     private Matrix4x4 _SelfMatrix4x4;
     private Mesh _CombinedBlock;
-    //private Vector3[] _CurrentBlockPoints;
-    private int _AngleValueIndexDifference;
-    private Vector3 _MaxAngleValuePoint;
     private Vector3 _TempFootPoint;
-    private Vector3 _TempVerticalLine;
-    private Vector3 _TempIntersectPoint;
 
     private const float PARCEL_MARGIN = 22.5f;
     private const float TOWER_MARGIN = 5f;
@@ -166,34 +161,34 @@ public class BuildingBlock : MonoBehaviour
 
     [SerializeField]
     //[HideInInspector]
-    private float[] _AngleValues;
-    public float[] AngleValues
+    private float[] _EdgeAngles;
+    public float[] EdgeAngles
     {
         get
         {
-            if (_AngleValues == null || _AngleValues.Length != 4)
+            if (_EdgeAngles == null || _EdgeAngles.Length != 4)
             {
-                _AngleValues = new float[4];
+                _EdgeAngles = new float[4];
             }
-            return _AngleValues;
+            return _EdgeAngles;
         }
-        private set => _AngleValues = value;
+        private set => _EdgeAngles = value;
     }
 
     [SerializeField]
     [HideInInspector]
-    private int[] _AngleValuesSort;
-    public int[] AngleValuesSort
+    private int[] _EdgeAnglesSort;
+    public int[] EdgeAnglesSort
     {
         get
         {
-            if (_AngleValuesSort == null || _AngleValuesSort.Length != 4)
+            if (_EdgeAnglesSort == null || _EdgeAnglesSort.Length != 4)
             {
-                _AngleValuesSort = new int[] { 0, 1, 2, 3 };
+                _EdgeAnglesSort = new int[] { 0, 1, 2, 3 };
             }
-            return _AngleValuesSort;
+            return _EdgeAnglesSort;
         }
-        private set => _AngleValuesSort = value;
+        private set => _EdgeAnglesSort = value;
     }
 
     [SerializeField]
@@ -352,7 +347,7 @@ public class BuildingBlock : MonoBehaviour
 
     private void OnDestroy()
     {
-        MeshRenderer.enabled = false;
+        SetBuildingVisible(false);
     }
 
     public void SetParcelPoints(int index, Vector3 value)
@@ -384,7 +379,7 @@ public class BuildingBlock : MonoBehaviour
 
             ParcelEdgeLengths[i] = Vector3.Distance(ParcelPoints[i], ParcelPoints.RepeatGet(i + 1));
 
-            AngleValues[i] = Vector3.Angle(LastVector3Ns[i], NextVector3Ns[i]);
+            EdgeAngles[i] = Vector3.Angle(LastVector3Ns[i], NextVector3Ns[i]);
 
             AngleSinValues[i] = Vector3.Cross(NextVector3Ns[i], LastVector3Ns[i]).magnitude;
         }
@@ -398,10 +393,10 @@ public class BuildingBlock : MonoBehaviour
 
         for (var i = 0; i < 4; i++)
         {
-            if (ParcelEdgeLengths[i] > 200 && ParcelEdgeLengths.RepeatGet(i + 1) > 200 || AngleValues[i] < 60)
+            if (ParcelEdgeLengths[i] > 200 && ParcelEdgeLengths.RepeatGet(i + 1) > 200 || EdgeAngles[i] < 60)
             {
                 // 不满足生成规则直接返回
-                MeshRenderer.enabled = false;
+                SetBuildingVisible(false);
                 NonCompliance = true;
                 return;
             }
@@ -420,7 +415,7 @@ public class BuildingBlock : MonoBehaviour
             if (_TempMaxEdgeLength < 55)
             {
                 // 不满足生成规则直接返回
-                MeshRenderer.enabled = false;
+                SetBuildingVisible(false);
                 NonCompliance = true;
                 return;
             }
@@ -435,9 +430,9 @@ public class BuildingBlock : MonoBehaviour
             {
                 if (BlockMaxEdgeLengths[0][BlockMaxEdgeLengthsSort[0][j]] > BlockMaxEdgeLengths[0][BlockMaxEdgeLengthsSort[0][j + 1]])
                 {
-                    _TempEdgeLengthSort = BlockMaxEdgeLengthsSort[0][j];
+                    _TempMaxEdgeLengthSort = BlockMaxEdgeLengthsSort[0][j];
                     BlockMaxEdgeLengthsSort[0][j] = BlockMaxEdgeLengthsSort[0][j + 1];
-                    BlockMaxEdgeLengthsSort[0][j + 1] = _TempEdgeLengthSort;
+                    BlockMaxEdgeLengthsSort[0][j + 1] = _TempMaxEdgeLengthSort;
                 }
             }
         }
@@ -446,13 +441,12 @@ public class BuildingBlock : MonoBehaviour
         _ContractDistances = new float[4];
         var minEdgeLengthIndex = BlockMaxEdgeLengthsSort[0][0];
         _ContractDistances[minEdgeLengthIndex] = 22.5f;
-        // 较短的一边贴边处理
-        var shorterEdgeLengthIndex = BlockMaxEdgeLengths[0].RepeatGet(minEdgeLengthIndex + 1) <= BlockMaxEdgeLengths[0].RepeatGet(minEdgeLengthIndex - 1) ? minEdgeLengthIndex + 1 : minEdgeLengthIndex - 1;
-        _ContractDistances.RepeatSet(shorterEdgeLengthIndex, 22.5f);
-        var longerEdgeRestDistance = Mathf.Max(0, BlockMaxEdgeLengths[0][minEdgeLengthIndex] - 105) * AngleSinValues.RepeatGet(shorterEdgeLengthIndex + 2);
-        _ContractDistances.RepeatSet(shorterEdgeLengthIndex + 2, longerEdgeRestDistance + 22.5f);
-        var faceEdgeRestDistance = Mathf.Max(0, BlockMaxEdgeLengths[0].RepeatGet(shorterEdgeLengthIndex) - 105) * AngleSinValues.RepeatGet(minEdgeLengthIndex + 2);
-        _ContractDistances.RepeatSet(minEdgeLengthIndex + 2, faceEdgeRestDistance + 22.5f);
+        var sideEdgeLengthIndex = BlockMaxEdgeLengths[0].RepeatGet(minEdgeLengthIndex + 1) <= BlockMaxEdgeLengths[0].RepeatGet(minEdgeLengthIndex - 1) ? minEdgeLengthIndex + 1 : minEdgeLengthIndex - 1;
+        _ContractDistances.RepeatSet(sideEdgeLengthIndex, 22.5f);
+        var otherSideRestDistance = Mathf.Max(0, BlockMaxEdgeLengths[0][minEdgeLengthIndex] - 105) * AngleSinValues.RepeatGet(sideEdgeLengthIndex + 2);
+        _ContractDistances.RepeatSet(sideEdgeLengthIndex + 2, otherSideRestDistance + 22.5f);
+        var oppositeRestDistance = Mathf.Max(0, BlockMaxEdgeLengths[0].RepeatGet(sideEdgeLengthIndex) - 105) * AngleSinValues.RepeatGet(minEdgeLengthIndex + 2);
+        _ContractDistances.RepeatSet(minEdgeLengthIndex + 2, oppositeRestDistance + 22.5f);
 
         // 重新计算最终收缩后的顶点
         for (var i = 0; i < 4; i++)
@@ -468,12 +462,12 @@ public class BuildingBlock : MonoBehaviour
 
         // 生成建筑区域第一阶层的多边形网格
         BlockStageMeshes[0] = CreatePrismMesh(BlockPointsLocal[0], 0.2f, 4f);
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
         {
-            _ChildTransform = transform.Find($"Floor-0-{i:D2}");
+            _ChildTransform = transform.Find($"Floor-1-{i:D2}");
             if (!_ChildTransform)
             {
-                _ChildGameObject = new GameObject($"Floor-0-{i:D2}");
+                _ChildGameObject = new GameObject($"Floor-1-{i:D2}");
                 _ChildTransform = _ChildGameObject.transform;
                 _ChildTransform.SetParent(transform);
                 _ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
@@ -488,16 +482,16 @@ public class BuildingBlock : MonoBehaviour
         };
 
         // 对建筑区域四个角角度进行排序（从大到小）
-        AngleValuesSort = new int[] { 0, 1, 2, 3 };
+        EdgeAnglesSort = new int[] { 0, 1, 2, 3 };
         for (var i = 0; i < 3; i++)
         {
             for (var j = 0; j < 3 - i; j++)
             {
-                if (AngleValues[AngleValuesSort[j]] < AngleValues[AngleValuesSort[j + 1]])
+                if (EdgeAngles[EdgeAnglesSort[j]] < EdgeAngles[EdgeAnglesSort[j + 1]])
                 {
-                    _TempAngleValueSort = AngleValuesSort[j];
-                    AngleValuesSort[j] = AngleValuesSort[j + 1];
-                    AngleValuesSort[j + 1] = _TempAngleValueSort;
+                    //_TempAngleSinValueSort = AngleSinValuesSort[j];
+                    EdgeAnglesSort[j] = EdgeAnglesSort[j + 1];
+                    EdgeAnglesSort[j + 1] = _TempMaxEdgeAngleSort;
                 }
             }
         }
@@ -516,7 +510,7 @@ public class BuildingBlock : MonoBehaviour
             if (_TempMaxEdgeLength < 45)
             {
                 // 不满足生成规则直接返回
-                MeshRenderer.enabled = false;
+                SetBuildingVisible(false);
                 NonCompliance = true;
                 return;
             }
@@ -531,169 +525,46 @@ public class BuildingBlock : MonoBehaviour
             {
                 if (BlockMaxEdgeLengths[1][BlockMaxEdgeLengthsSort[1][j]] > BlockMaxEdgeLengths[1][BlockMaxEdgeLengthsSort[1][j + 1]])
                 {
-                    _TempEdgeLengthSort = BlockMaxEdgeLengthsSort[1][j];
+                    _TempMaxEdgeLengthSort = BlockMaxEdgeLengthsSort[1][j];
                     BlockMaxEdgeLengthsSort[1][j] = BlockMaxEdgeLengthsSort[1][j + 1];
-                    BlockMaxEdgeLengthsSort[1][j + 1] = _TempEdgeLengthSort;
+                    BlockMaxEdgeLengthsSort[1][j + 1] = _TempMaxEdgeLengthSort;
                 }
             }
         }
 
         // 计算建筑区域第二阶层的数据
-        var maxAngleValueIndex = AngleValuesSort[0];
-        var secondAngleValueIndex = AngleValuesSort[1];
-        var thirdAngleValueIndex = AngleValuesSort[2];
-        var minAngleValueIndex = AngleValuesSort[3];
-        var secondAngleValue = AngleValues[secondAngleValueIndex];
-        var thirdAngleValue = AngleValues[thirdAngleValueIndex];
-        //var maxEdgeLengthIndex = BlockMaxEdgeLengthsSort[1][3];
-
-        //_CurrentBlockPoints = BlockPoints[1];
+        var maxEdgeLengthIndex = BlockMaxEdgeLengthsSort[1][3];
 
         // 排序第一的角一定为钝角
-        // 排序第二的角为钝角
-        if (secondAngleValue > 90)
-        {
-            // 排序第三的角为直角
-            if (thirdAngleValue == 90)
-            {
-                // 直角前后两角的角度
-                var nextBlockPoint = BlockPoints[1].RepeatGet(thirdAngleValueIndex + 1, out var nextAngleValueIndex);
-                var lastBlockPoint = BlockPoints[1].RepeatGet(thirdAngleValueIndex - 1, out var lastAngleValueIndex);
-
-                // 作垂线求交点
-                _TempVerticalLine = Vector3.Cross(NextVector3Ns[thirdAngleValueIndex], Vector3.up).normalized;
-                _TempIntersectPoint = TwoLinesIntersectPoint(nextBlockPoint, nextBlockPoint + _TempVerticalLine,
-                                                             lastBlockPoint, BlockPoints[1][minAngleValueIndex]);
-                BlockPoints[1][minAngleValueIndex] = _TempIntersectPoint;
-
-                // 再次作垂线求交点
-                _TempVerticalLine = Vector3.Cross(LastVector3Ns[thirdAngleValueIndex], Vector3.up).normalized;
-                _TempIntersectPoint = TwoLinesIntersectPoint(lastBlockPoint, lastBlockPoint + _TempVerticalLine,
-                                                             nextBlockPoint, BlockPoints[1][minAngleValueIndex]);
-                BlockPoints[1][minAngleValueIndex] = _TempIntersectPoint;
-            }
-            // 排序第三的角为锐角
-            else if (thirdAngleValue < 90)
-            {
-                // 两个钝角序号的差值
-                _AngleValueIndexDifference = Mathf.Abs(secondAngleValueIndex - thirdAngleValueIndex) % 2;
-
-                // 类平行四边形
-                if (_AngleValueIndexDifference == 0)
-                {
-
-                }
-                // 类常规梯形
-                else if (_AngleValueIndexDifference == 1)
-                {
-
-                }
-            }
-
-        }
         // 排序第二的角为直角
-        else if (secondAngleValue == 90)
+        if (AngleSinValues[AngleSinValuesSort[1]] == 90)
         {
             // 排序第三的角为直角
-            if (thirdAngleValue == 90)
+            if (AngleSinValues[AngleSinValuesSort[2]] == 90)
             {
-                // 最大角前后两角的角度
-                var nextAngleValue = AngleValues.RepeatGet(maxAngleValueIndex + 1, out var nextAngleValueIndex);
-                var lastAngleValue = AngleValues.RepeatGet(maxAngleValueIndex - 1, out var lastAngleValueIndex);
-
-                _MaxAngleValuePoint = BlockPoints[1][maxAngleValueIndex];
-
-                // 右直角梯形
-                if (nextAngleValue > lastAngleValue)
-                {
-                    // 作垂线求交点
-                    _TempVerticalLine = Vector3.Cross(NextVector3Ns[maxAngleValueIndex], Vector3.up).normalized;
-                    _TempIntersectPoint = TwoLinesIntersectPoint(_MaxAngleValuePoint, _MaxAngleValuePoint + _TempVerticalLine,
-                                                                 BlockPoints[1].RepeatGet(maxAngleValueIndex + 2), BlockPoints[1].RepeatGet(maxAngleValueIndex + 3));
-                    BlockPointsLocal[1][lastAngleValueIndex] = _TempIntersectPoint - transform.position;
-                }
-                // 左直角梯形
-                else if (nextAngleValue < lastAngleValue)
-                {
-                    // 作垂线求交点
-                    _TempVerticalLine = Vector3.Cross(LastVector3Ns[maxAngleValueIndex], Vector3.up).normalized;
-                    _TempIntersectPoint = TwoLinesIntersectPoint(_MaxAngleValuePoint, _MaxAngleValuePoint + _TempVerticalLine,
-                                                                 BlockPoints[1].RepeatGet(maxAngleValueIndex + 1), BlockPoints[1].RepeatGet(maxAngleValueIndex + 2));
-                    BlockPointsLocal[1][nextAngleValueIndex] = _TempIntersectPoint - transform.position;
-                }
-                // 特殊情况
-                else if (nextAngleValue == lastAngleValue)
-                {
-                    var faceAngleValueIndex = AngleValues.RepeatIndex(maxAngleValueIndex + 2);
-
-                    // 作垂线求交点
-                    _TempVerticalLine = Vector3.Cross(NextVector3Ns[maxAngleValueIndex], Vector3.up).normalized;
-                    _TempIntersectPoint = TwoLinesIntersectPoint(_MaxAngleValuePoint, _MaxAngleValuePoint + _TempVerticalLine,
-                                                                 BlockPoints[1].RepeatGet(maxAngleValueIndex + 2), BlockPoints[1].RepeatGet(maxAngleValueIndex + 3));
-                    BlockPointsLocal[1][lastAngleValueIndex] = _TempIntersectPoint - transform.position;
-
-                    // 再次作垂线求交点
-                    _TempVerticalLine = Vector3.Cross(_TempVerticalLine, Vector3.up).normalized;
-                    _TempIntersectPoint = TwoLinesIntersectPoint(_TempIntersectPoint, _TempIntersectPoint + _TempVerticalLine,
-                                                                 BlockPoints[1].RepeatGet(maxAngleValueIndex + 1), BlockPoints[1].RepeatGet(maxAngleValueIndex + 2));
-                    BlockPointsLocal[1][faceAngleValueIndex] = _TempIntersectPoint - transform.position;
-                }
+                _TempFootPoint = Point2LineFootPoint(BlockPointsLocal[1][AngleSinValuesSort[0]], BlockPointsLocal[1][maxEdgeLengthIndex], BlockPointsLocal[1].RepeatGet(maxEdgeLengthIndex + 1));
+                BlockPointsLocal[1][maxEdgeLengthIndex] = _TempFootPoint;
+                BlockPoints[1][maxEdgeLengthIndex] = transform.position + _TempFootPoint;
             }
             // 排序第三的角为锐角
-            else if (secondAngleValue < 90)
+            else if (AngleSinValues[AngleSinValuesSort[2]] < 90)
             {
-                // 钝角与直角序号的差值
-                _AngleValueIndexDifference = Mathf.Abs(maxAngleValueIndex - secondAngleValueIndex) % 2;
-
-                if (_AngleValueIndexDifference == 0)
+                // 由钝角边向量与正上方向的叉积求法向量
+                if(AngleSinValuesSort[0] - AngleSinValuesSort[1] == 1)
                 {
-
-                }
-                else if (_AngleValueIndexDifference == 1)
-                {
-
+                    var noname = Vector3.Cross()
                 }
             }
         }
-        // 排序第二的角为锐角
-        else if (secondAngleValue < 90)
+        // 排序第二的角也为钝角
+        else
         {
 
-        }
-
-        // 重新计算最终收缩后的顶点
-        for (var i = 0; i < 4; i++)
-        {
-            BlockPoints[1][i] = transform.position + BlockPointsLocal[1][i];
-        }
-
-        for (var i = 0; i < 4; i++)
-        {
-            BlockEdgeLengths[1][i] = Vector3.Distance(BlockPoints[1][i], BlockPoints[1].RepeatGet(i + 1));
         }
 
         // 生成建筑区域第二阶层的多边形网格
-        BlockStageMeshes[1] = CreatePrismMesh(BlockPointsLocal[1], 0.2f, 4f);
-        for (var i = 5; i < 46; i++)
-        {
-            _ChildTransform = transform.Find($"Floor-1-{i:D2}");
-            if (!_ChildTransform)
-            {
-                _ChildGameObject = new GameObject($"Floor-1-{i:D2}");
-                _ChildTransform = _ChildGameObject.transform;
-                _ChildTransform.SetParent(transform);
-                _ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
-            }
-            _ChildTransform.localPosition = new Vector3(0, i * 4f, 0);
-            _ChildTransform.localRotation = Quaternion.identity;
-            _ChildTransform.localScale = Vector3.one;
-            _ChildMeshFilter = _ChildTransform.GetOrAddComponent<MeshFilter>();
-            _ChildMeshRenderer = _ChildTransform.GetOrAddComponent<MeshRenderer>();
-            _ChildMeshFilter.mesh = BlockStageMeshes[1];
-            _ChildMeshRenderer.material = DefaultMaterials[1];
-        };
 
-        // 合并所有已经生成的中间网格
+        // 合并所有网格
         _SelfChildCount = transform.childCount;
         _CombineInstances = new CombineInstance[_SelfChildCount];
         _ChildMaterials = new Material[_SelfChildCount];
@@ -710,7 +581,6 @@ public class BuildingBlock : MonoBehaviour
             _CombineInstances[i].mesh = _ChildMeshFilter.sharedMesh;
             _CombineInstances[i].transform = _SelfMatrix4x4 * _ChildMeshFilter.transform.localToWorldMatrix;
             _ChildMeshRenderer.enabled = false;
-            //_ChildMeshRenderer.gameObject.hideFlags = HideFlags.None;
             _ChildMaterials[i] = _ChildMeshRenderer.sharedMaterial;
         }
         _CombinedBlock = new Mesh
@@ -720,10 +590,25 @@ public class BuildingBlock : MonoBehaviour
         _CombinedBlock.CombineMeshes(_CombineInstances, false);
         MeshFilter.mesh = _CombinedBlock;
         MeshRenderer.sharedMaterials = _ChildMaterials;
-        MeshRenderer.enabled = true;
+
+        //// 隐藏用于中间过渡的子物体
+        //for (var i = 0; i < transform.childCount; i++)
+        //{
+        //    _TempTransform = transform.GetChild(i);
+        //    if (_TempTransform)
+        //    {
+        //        _TempTransform.gameObject.SetActive(false);
+        //    }
+        //}
+
+        SetBuildingVisible(true);
     }
 
-    // 生成四棱柱多边形网格
+    public void SetBuildingVisible(bool visible)
+    {
+        MeshRenderer.enabled = visible;
+    }
+
     private static Mesh _PrismMesh;
     private static Mesh CreatePrismMesh(Vector3[] points, float floor, float ceil)
     {
@@ -810,22 +695,5 @@ public class BuildingBlock : MonoBehaviour
             var z = (-equationA * equationB * point.x + equationA * equationA * point.z - equationB * equationC) / (equationA * equationA + equationB * equationB);
             return new Vector3(x, 0, z);
         }
-    }
-
-    // 求两个向量的交点
-    private static Vector3 TwoLinesIntersectPoint(Vector3 line1Point1, Vector3 line1Point2, Vector3 line2Point1, Vector3 line2Point2)
-    {
-        // 叉乘为0则平行或共线不相交
-        var vector3N1 = line1Point2 - line1Point1;
-        var vector3N2 = line2Point2 - line2Point1;
-        var crossProduct = Vector3.Cross(vector3N1, vector3N2).magnitude;
-        // 线段所在直线的交点坐标 (x, 0, z)
-        var x = ((line1Point2.x - line1Point1.x) * (line2Point2.x - line2Point1.x) * (line2Point1.z - line1Point1.z)
-                + (line1Point2.z - line1Point1.z) * (line2Point2.x - line2Point1.x) * line1Point1.x
-                - (line2Point2.z - line2Point1.z) * (line1Point2.x - line1Point1.x) * line2Point1.x) / crossProduct;
-        var z = -((line1Point2.z - line1Point1.z) * (line2Point2.z - line2Point1.z) * (line2Point1.x - line1Point1.x)
-                + (line1Point2.x - line1Point1.x) * (line2Point2.z - line2Point1.z) * line1Point1.z
-                - (line2Point2.x - line2Point1.x) * (line1Point2.z - line1Point1.z) * line2Point1.z) / crossProduct;
-        return new Vector3(x, 0, z);
     }
 }
