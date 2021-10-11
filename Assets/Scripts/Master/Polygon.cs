@@ -1,0 +1,312 @@
+﻿using UnityEditor;
+using UnityEngine;
+
+public class Polygon
+{
+    private int _TempEdgeLengthSort;
+    private int _TempAngleValueSort;
+
+    private Vector3[] _Points;
+    public Vector3[] Points
+    {
+        get
+        {
+            if (_Points == null || _Points.Length != 4)
+            {
+                _Points = new Vector3[] {
+                    new Vector3(-50, 0, -50),
+                    new Vector3(-50, 0, 50),
+                    new Vector3(50, 0, 50),
+                    new Vector3(50, 0, -50)
+                };
+            }
+            return _Points;
+        }
+        private set => _Points = value;
+    }
+
+    private Vector3[] _TempPoints;
+
+    private Vector3[] _LastVector3Ns;
+    public Vector3[] LastVector3Ns
+    {
+        get
+        {
+            if (_LastVector3Ns == null || _LastVector3Ns.Length != 4)
+            {
+                _LastVector3Ns = new Vector3[4];
+            }
+            return _LastVector3Ns;
+        }
+        private set => _LastVector3Ns = value;
+    }
+
+    private Vector3[] _NextVector3Ns;
+    public Vector3[] NextVector3Ns
+    {
+        get
+        {
+            if (_NextVector3Ns == null || _NextVector3Ns.Length != 4)
+            {
+                _NextVector3Ns = new Vector3[4];
+            }
+            return _NextVector3Ns;
+        }
+        private set => _NextVector3Ns = value;
+    }
+
+    private Vector3[] _VerticalVector3Ns;
+    public Vector3[] VerticalVector3Ns
+    {
+        get
+        {
+            if (_VerticalVector3Ns == null || _VerticalVector3Ns.Length != 4)
+            {
+                _VerticalVector3Ns = new Vector3[4];
+            }
+            return _VerticalVector3Ns;
+        }
+        private set => _VerticalVector3Ns = value;
+    }
+
+    private float[] _EdgeLengths;
+    public float[] EdgeLengths
+    {
+        get
+        {
+            if (_EdgeLengths == null || _EdgeLengths.Length != 4)
+            {
+                _EdgeLengths = new float[4];
+            }
+            return _EdgeLengths;
+        }
+        private set => _EdgeLengths = value;
+    }
+
+    private int[] _EdgeLengthsSort;
+    public int[] EdgeLengthsSort
+    {
+        get
+        {
+            if (_EdgeLengthsSort == null || _EdgeLengthsSort.Length != 4)
+            {
+                _EdgeLengthsSort = new int[] { 0, 1, 2, 3 };
+            }
+            return _EdgeLengthsSort;
+        }
+        private set => _EdgeLengthsSort = value;
+    }
+
+    private float[] _AngleValues;
+    public float[] AngleValues
+    {
+        get
+        {
+            if (_AngleValues == null || _AngleValues.Length != 4)
+            {
+                _AngleValues = new float[4];
+            }
+            return _AngleValues;
+        }
+        private set => _AngleValues = value;
+    }
+
+    private int[] _AngleValuesSort;
+    public int[] AngleValuesSort
+    {
+        get
+        {
+            if (_AngleValuesSort == null || _AngleValuesSort.Length != 4)
+            {
+                _AngleValuesSort = new int[] { 0, 1, 2, 3 };
+            }
+            return _AngleValuesSort;
+        }
+        private set => _AngleValuesSort = value;
+    }
+
+    private float[] _AngleSinValues;
+    public float[] AngleSinValues
+    {
+        get
+        {
+            if (_AngleSinValues == null || _AngleSinValues.Length != 4)
+            {
+                _AngleSinValues = new float[4];
+            }
+            return _AngleSinValues;
+        }
+        private set => _AngleSinValues = value;
+    }
+
+    private Mesh _PrismMesh;
+    public Mesh PrismMesh
+    {
+        get
+        {
+            if (_PrismMesh == null)
+            {
+                CreatePrismMesh(Points, 0.2f, 4f);
+            }
+            return _PrismMesh;
+        }
+        private set => _PrismMesh = value;
+    }
+
+    public Polygon()
+    {
+        Refresh();
+    }
+
+    public Polygon(Vector3[] points)
+    {
+        Points = points;
+        Refresh();
+    }
+
+    // 收缩多边形方法
+    public void Shrink(float margin)
+    {
+        _TempPoints = new Vector3[4];
+
+        for (var i = 0; i < 4; i++)
+        {
+            _TempPoints[i] = Points[i] - (NextVector3Ns[i] + LastVector3Ns[i]) * (margin / AngleSinValues[i]);
+        }
+
+        Points = _TempPoints;
+        Refresh();
+    }
+
+    // 收缩多边形方法
+    public void Shrink(float[] margins)
+    {
+        _TempPoints = new Vector3[4];
+
+        for (var i = 0; i < 4; i++)
+        {
+            _TempPoints[i] = Points[i] - (LastVector3Ns[i] * margins[i] + NextVector3Ns[i] * margins.RepeatGet(i - 1)) / AngleSinValues[i];
+        }
+
+        Points = _TempPoints;
+        Refresh();
+    }
+
+    public void Refresh(Vector3[] points)
+    {
+        Points = points;
+        Refresh();
+    }
+
+    public void Refresh()
+    {
+        // 计算基础数据
+        for (var i = 0; i < 4; i++)
+        {
+            LastVector3Ns[i] = (Points[i] - Points.RepeatGet(i - 1)).normalized;
+
+            NextVector3Ns[i] = (Points[i] - Points.RepeatGet(i + 1)).normalized;
+
+            VerticalVector3Ns[i] = Vector3.Cross(NextVector3Ns[i], Vector3.up).normalized;
+
+            EdgeLengths[i] = Vector3.Distance(Points[i], Points.RepeatGet(i + 1));
+
+            AngleValues[i] = Vector3.Angle(LastVector3Ns[i], NextVector3Ns[i]);
+
+            AngleSinValues[i] = Vector3.Cross(LastVector3Ns[i], NextVector3Ns[i]).magnitude;
+        }
+
+        // 对多边形四条边边长排序（从小到大）
+        EdgeLengthsSort = new int[] { 0, 1, 2, 3 };
+        for (var i = 0; i < 3; i++)
+        {
+            for (var j = 0; j < 3 - i; j++)
+            {
+                if (EdgeLengths[EdgeLengthsSort[j]] > EdgeLengths[EdgeLengthsSort[j + 1]])
+                {
+                    _TempEdgeLengthSort = EdgeLengthsSort[j];
+                    EdgeLengthsSort[j] = EdgeLengthsSort[j + 1];
+                    EdgeLengthsSort[j + 1] = _TempEdgeLengthSort;
+                }
+            }
+        }
+
+        // 对多边形四个角角度排序（从大到小）
+        AngleValuesSort = new int[] { 0, 1, 2, 3 };
+        for (var i = 0; i < 3; i++)
+        {
+            for (var j = 0; j < 3 - i; j++)
+            {
+                if (AngleValues[AngleValuesSort[j]] < AngleValues[AngleValuesSort[j + 1]])
+                {
+                    _TempAngleValueSort = AngleValuesSort[j];
+                    AngleValuesSort[j] = AngleValuesSort[j + 1];
+                    AngleValuesSort[j + 1] = _TempAngleValueSort;
+                }
+            }
+        }
+
+        CreatePrismMesh(Points, 0.2f, 4f);
+    }
+
+    // 生成四棱柱多边形网格
+    private void CreatePrismMesh(Vector3[] points, float floor, float ceil)
+    {
+        if (points.Length != 4)
+        {
+            return;
+        }
+
+        _PrismMesh = new Mesh();
+
+        var vertices = new Vector3[24];
+        var triangles = new int[36];
+
+        //forward
+        vertices[0] = points[1] + Vector3.up * floor;
+        vertices[1] = points[0] + Vector3.up * floor;
+        vertices[2] = points[1] + Vector3.up * ceil;
+        vertices[3] = points[0] + Vector3.up * ceil;
+        //back
+        vertices[4] = points[2] + Vector3.up * ceil;
+        vertices[5] = points[3] + Vector3.up * ceil;
+        vertices[6] = points[2] + Vector3.up * floor;
+        vertices[7] = points[3] + Vector3.up * floor;
+        //up
+        vertices[8] = vertices[2];
+        vertices[9] = vertices[3];
+        vertices[10] = vertices[4];
+        vertices[11] = vertices[5];
+        //down
+        vertices[12] = vertices[6];
+        vertices[13] = vertices[7];
+        vertices[14] = vertices[0];
+        vertices[15] = vertices[1];
+        //right
+        vertices[16] = vertices[6];
+        vertices[17] = vertices[0];
+        vertices[18] = vertices[4];
+        vertices[19] = vertices[2];
+        //left
+        vertices[20] = vertices[5];
+        vertices[21] = vertices[3];
+        vertices[22] = vertices[7];
+        vertices[23] = vertices[1];
+
+        var currentCount = 0;
+        for (var i = 0; i < 24; i += 4)
+        {
+            triangles[currentCount++] = i;
+            triangles[currentCount++] = i + 3;
+            triangles[currentCount++] = i + 1;
+
+            triangles[currentCount++] = i;
+            triangles[currentCount++] = i + 2;
+            triangles[currentCount++] = i + 3;
+        }
+
+        _PrismMesh.vertices = vertices;
+        _PrismMesh.triangles = triangles;
+        _PrismMesh.RecalculateNormals();
+    }
+}

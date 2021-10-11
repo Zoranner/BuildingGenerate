@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using System;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -10,15 +11,15 @@ public class BuildingBlock : MonoBehaviour
     private int _TempEdgeLengthSort;
     private int _TempAngleValueSort;
     private float[] _ContractDistances;
-    private int _SelfChildCount;
+    private readonly int _SelfChildCount;
     private Transform _ChildTransform;
     private GameObject _ChildGameObject;
     private MeshFilter _ChildMeshFilter;
     private MeshRenderer _ChildMeshRenderer;
-    private CombineInstance[] _CombineInstances;
-    private Material[] _ChildMaterials;
+    private readonly CombineInstance[] _CombineInstances;
+    private readonly Material[] _ChildMaterials;
     private Matrix4x4 _SelfMatrix4x4;
-    private Mesh _CombinedBlock;
+    private readonly Mesh _CombinedBlock;
     //private Vector3[] _CurrentBlockPoints;
     private int _AngleValueIndexDifference;
     private Vector3 _MaxAngleValuePoint;
@@ -30,6 +31,16 @@ public class BuildingBlock : MonoBehaviour
     private const float TOWER_MARGIN = 5f;
 
     public Material[] DefaultMaterials;
+
+    public float Far = 3;
+
+    private void Update()
+    {
+        for (var i = 0; i < transform.childCount; i++)
+        {
+            transform.GetChild(i).gameObject.SetActive(i < Far * 8);
+        }
+    }
 
     [SerializeField]
     [HideInInspector]
@@ -129,7 +140,7 @@ public class BuildingBlock : MonoBehaviour
             }
             return _NextVector3Ns;
         }
-        private set => _ParcelPoints = value;
+        private set => _NextVector3Ns = value;
     }
 
     [SerializeField]
@@ -476,7 +487,7 @@ public class BuildingBlock : MonoBehaviour
                 _ChildGameObject = new GameObject($"Floor-0-{i:D2}");
                 _ChildTransform = _ChildGameObject.transform;
                 _ChildTransform.SetParent(transform);
-                _ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
+                //_ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
             }
             _ChildTransform.localPosition = new Vector3(0, i * 4f, 0);
             _ChildTransform.localRotation = Quaternion.identity;
@@ -545,7 +556,34 @@ public class BuildingBlock : MonoBehaviour
         var minAngleValueIndex = AngleValuesSort[3];
         var secondAngleValue = AngleValues[secondAngleValueIndex];
         var thirdAngleValue = AngleValues[thirdAngleValueIndex];
+        var rightAngleValueIndex = Array.IndexOf(AngleValues, 90);
         //var maxEdgeLengthIndex = BlockMaxEdgeLengthsSort[1][3];
+
+        //if (rightAngleValueIndex != -1)
+        //{
+        //    var nextEdgeLength = Mathf.Min(BlockEdgeLengths[1][rightAngleValueIndex], 55);
+        //    var nextBlockPoint = BlockPointsLocal[1][rightAngleValueIndex] + NextVector3Ns[rightAngleValueIndex] * nextEdgeLength;
+        //    var nextAngleValueIndex = AngleValues.RepeatIndex(thirdAngleValueIndex + 1);
+        //    var lastAngleValueIndex = AngleValues.RepeatIndex(thirdAngleValueIndex - 1);
+        //    var faceAngleValueIndex = AngleValues.RepeatIndex(rightAngleValueIndex + 2);
+        //    BlockPointsLocal[1][nextAngleValueIndex] = nextBlockPoint;
+        //    // 作垂线求交点
+        //    _TempVerticalLine = Vector3.Cross(NextVector3Ns[rightAngleValueIndex], Vector3.up).normalized;
+        //    _TempIntersectPoint = TwoLinesIntersectPoint(nextBlockPoint, nextBlockPoint + _TempVerticalLine,
+        //                                                 BlockPointsLocal[1][faceAngleValueIndex], BlockPointsLocal[1][minAngleValueIndex]);
+        //    BlockPointsLocal[1][faceAngleValueIndex] = _TempIntersectPoint;
+
+        //    var lastEdgeLength = Mathf.Min(BlockEdgeLengths[1][lastAngleValueIndex], 55);
+        //    var lastBlockPoint = BlockPointsLocal[1][rightAngleValueIndex] + LastVector3Ns[rightAngleValueIndex] * lastEdgeLength;
+        //    //BlockPointsLocal[1].RepeatSet(rightAngleValueIndex + 1, sidePoint);
+
+        //    // 再次作垂线求交点
+        //    _TempVerticalLine = Vector3.Cross(LastVector3Ns[rightAngleValueIndex], Vector3.up).normalized;
+        //    _TempIntersectPoint = TwoLinesIntersectPoint(lastBlockPoint, lastBlockPoint + _TempVerticalLine,
+        //                                                 nextBlockPoint, BlockPoints[1][minAngleValueIndex]);
+        //    BlockPoints[1][minAngleValueIndex] = _TempIntersectPoint;
+        //}
+
 
         //_CurrentBlockPoints = BlockPoints[1];
 
@@ -672,6 +710,13 @@ public class BuildingBlock : MonoBehaviour
             BlockEdgeLengths[1][i] = Vector3.Distance(BlockPoints[1][i], BlockPoints[1].RepeatGet(i + 1));
         }
 
+        //for (var i = 0; i < 4; i++)
+        //{
+        //    LastVector3Ns[i] = (ParcelPoints[i] - ParcelPoints.RepeatGet(i - 1)).normalized;
+
+        //    NextVector3Ns[i] = (ParcelPoints[i] - ParcelPoints.RepeatGet(i + 1)).normalized;
+        //}
+
         // 生成建筑区域第二阶层的多边形网格
         BlockStageMeshes[1] = CreatePrismMesh(BlockPointsLocal[1], 0.2f, 4f);
         for (var i = 5; i < 46; i++)
@@ -682,7 +727,7 @@ public class BuildingBlock : MonoBehaviour
                 _ChildGameObject = new GameObject($"Floor-1-{i:D2}");
                 _ChildTransform = _ChildGameObject.transform;
                 _ChildTransform.SetParent(transform);
-                _ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
+                //_ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
             }
             _ChildTransform.localPosition = new Vector3(0, i * 4f, 0);
             _ChildTransform.localRotation = Quaternion.identity;
@@ -693,34 +738,76 @@ public class BuildingBlock : MonoBehaviour
             _ChildMeshRenderer.material = DefaultMaterials[1];
         };
 
-        // 合并所有已经生成的中间网格
-        _SelfChildCount = transform.childCount;
-        _CombineInstances = new CombineInstance[_SelfChildCount];
-        _ChildMaterials = new Material[_SelfChildCount];
-        _SelfMatrix4x4 = transform.worldToLocalMatrix;
-        for (var i = 0; i < _SelfChildCount; i++)
+        // 统一收缩5米边距留出第三阶层过道
+        for (var i = 0; i < 4; i++)
         {
-            _ChildTransform = transform.GetChild(i);
-            _ChildMeshFilter = _ChildTransform.GetComponent<MeshFilter>();
-            _ChildMeshRenderer = _ChildTransform.GetComponent<MeshRenderer>();
-            if (_ChildMeshFilter == null || _ChildMeshRenderer == null)
-            {
-                continue;
-            }
-            _CombineInstances[i].mesh = _ChildMeshFilter.sharedMesh;
-            _CombineInstances[i].transform = _SelfMatrix4x4 * _ChildMeshFilter.transform.localToWorldMatrix;
-            _ChildMeshRenderer.enabled = false;
-            //_ChildMeshRenderer.gameObject.hideFlags = HideFlags.None;
-            _ChildMaterials[i] = _ChildMeshRenderer.sharedMaterial;
+            BlockPointsLocal[2][i] = BlockPointsLocal[1][i] - (NextVector3Ns[i] + LastVector3Ns[i]) * (TOWER_MARGIN / AngleSinValues[i]);
+            BlockPoints[2][i] = transform.position + BlockPointsLocal[2][i];
         }
-        _CombinedBlock = new Mesh
+
+        // 计算第三阶层最大建筑区域四条边边长
+        for (var i = 0; i < 4; i++)
         {
-            name = "Combined Block"
+            _TempMaxEdgeLength = Vector3.Distance(BlockPointsLocal[2][i], BlockPointsLocal[2].RepeatGet(i + 1));
+            if (_TempMaxEdgeLength < 35)
+            {
+                // 不满足生成规则直接返回
+                MeshRenderer.enabled = false;
+                NonCompliance = true;
+                return;
+            }
+            BlockMaxEdgeLengths[2][i] = _TempMaxEdgeLength;
+        }
+
+        // 生成建筑区域第三阶层的多边形网格
+        BlockStageMeshes[2] = CreatePrismMesh(BlockPointsLocal[2], 0.2f, 4f);
+        for (var i = 46; i < 61; i++)
+        {
+            _ChildTransform = transform.Find($"Floor-2-{i:D2}");
+            if (!_ChildTransform)
+            {
+                _ChildGameObject = new GameObject($"Floor-2-{i:D2}");
+                _ChildTransform = _ChildGameObject.transform;
+                _ChildTransform.SetParent(transform);
+                //_ChildGameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+            _ChildTransform.localPosition = new Vector3(0, i * 4f, 0);
+            _ChildTransform.localRotation = Quaternion.identity;
+            _ChildTransform.localScale = Vector3.one;
+            _ChildMeshFilter = _ChildTransform.GetOrAddComponent<MeshFilter>();
+            _ChildMeshRenderer = _ChildTransform.GetOrAddComponent<MeshRenderer>();
+            _ChildMeshFilter.mesh = BlockStageMeshes[2];
+            _ChildMeshRenderer.material = DefaultMaterials[2];
         };
-        _CombinedBlock.CombineMeshes(_CombineInstances, false);
-        MeshFilter.mesh = _CombinedBlock;
-        MeshRenderer.sharedMaterials = _ChildMaterials;
-        MeshRenderer.enabled = true;
+
+        //// 合并所有已经生成的中间网格
+        //_SelfChildCount = transform.childCount;
+        //_CombineInstances = new CombineInstance[_SelfChildCount];
+        //_ChildMaterials = new Material[_SelfChildCount];
+        //_SelfMatrix4x4 = transform.worldToLocalMatrix;
+        //for (var i = 0; i < _SelfChildCount; i++)
+        //{
+        //    _ChildTransform = transform.GetChild(i);
+        //    _ChildMeshFilter = _ChildTransform.GetComponent<MeshFilter>();
+        //    _ChildMeshRenderer = _ChildTransform.GetComponent<MeshRenderer>();
+        //    if (_ChildMeshFilter == null || _ChildMeshRenderer == null)
+        //    {
+        //        continue;
+        //    }
+        //    _CombineInstances[i].mesh = _ChildMeshFilter.sharedMesh;
+        //    _CombineInstances[i].transform = _SelfMatrix4x4 * _ChildMeshFilter.transform.localToWorldMatrix;
+        //    _ChildMeshRenderer.enabled = false;
+        //    //_ChildMeshRenderer.gameObject.hideFlags = HideFlags.None;
+        //    _ChildMaterials[i] = _ChildMeshRenderer.sharedMaterial;
+        //}
+        //_CombinedBlock = new Mesh
+        //{
+        //    name = "Combined Block"
+        //};
+        //_CombinedBlock.CombineMeshes(_CombineInstances, false);
+        //MeshFilter.mesh = _CombinedBlock;
+        //MeshRenderer.sharedMaterials = _ChildMaterials;
+        //MeshRenderer.enabled = true;
     }
 
     // 生成四棱柱多边形网格
@@ -827,5 +914,23 @@ public class BuildingBlock : MonoBehaviour
                 + (line1Point2.x - line1Point1.x) * (line2Point2.z - line2Point1.z) * line1Point1.z
                 - (line2Point2.x - line2Point1.x) * (line1Point2.z - line1Point1.z) * line2Point1.z) / crossProduct;
         return new Vector3(x, 0, z);
+    }
+
+    // 判断一个点是否在凸多边形内
+    private static bool IsPointInPolygon(Vector3 point, Vector3[] polyPoints)
+    {
+        var crossProducts = Vector3.Cross(polyPoints[0], polyPoints[1]).magnitude;
+
+        for (var i = 1; i < polyPoints.Length; i++)
+        {
+            crossProducts *= Vector3.Cross(polyPoints[i], polyPoints.RepeatGet(i + 1)).magnitude;
+
+            if (crossProducts < 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
